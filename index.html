@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e0e">
+<title>CapsLab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e0e;
+    --card: #181818;
+    --border: #272727;
+    --text: #f0ede6;
+    --muted: #6b6860;
+    --accent: #e8a420;
+    --A: #27ae60;
+    --B: #8cc63f;
+    --C: #f0c040;
+    --D: #e07c30;
+    --E: #d63031;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+  }
+
+  /* ───── PAGES ───── */
+  .page {
+    position: fixed; inset: 0;
+    overflow-y: auto; overflow-x: hidden;
+    background: var(--bg);
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(.4, 0, .2, 1);
+    will-change: transform;
+    -webkit-overflow-scrolling: touch;
+  }
+  .page.active { transform: translateX(0); }
+  .page.behind { transform: translateX(-40%); }
+
+  /* ───── GLOBAL ───── */
+  .err { color: var(--E) !important; }
+
+  .back-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: none; border: none; color: var(--muted);
+    font-family: 'DM Sans', sans-serif; font-size: 14px;
+    cursor: pointer; padding: 0; margin-bottom: 20px;
+  }
+  .back-btn:active { opacity: 0.6; }
+  .back-btn svg { flex-shrink: 0; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #222; border: 1px solid var(--border);
+    border-radius: 99px; padding: 5px 12px;
+    font-size: 13px; font-weight: 500;
+  }
+  .pill.missing { border-color: var(--E); color: var(--E); }
+  .pill-input { border-color: var(--accent); gap: 6px; padding: 4px 10px 4px 12px; }
+  .pill-input input {
+    background: transparent; border: none; outline: none;
+    color: var(--text); font-family: inherit;
+    font-size: 14px; font-weight: 600; width: 52px; padding: 2px 0;
+    -moz-appearance: textfield;
+  }
+  .pill-input input::-webkit-outer-spin-button,
+  .pill-input input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .pill-input input::placeholder { color: var(--muted); font-weight: 400; }
+
+  /* ───── LOADING ───── */
+  #loading {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(14,14,14,0.92);
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px;
+  }
+  #loading.show { display: flex; }
+  .spinner {
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    animation: spin 0.7s linear infinite;
+  }
+  #loading-msg { color: var(--muted); font-size: 14px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ══════════════════════════════════
+     PAGE 1 — SCANNER
+  ══════════════════════════════════ */
+  #p1 { background: #000; }
+
+  #video-el {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: none; z-index: 1;
+  }
+  .scan-vignette {
+    position: fixed; inset: 0; z-index: 2;
+    background: radial-gradient(ellipse 70% 45% at 50% 50%, transparent 0%, rgba(0,0,0,0.72) 100%);
+    pointer-events: none; display: none;
+  }
+  .scan-vignette.show { display: block; }
+
+  .scan-header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 4;
+    padding: 52px 24px 16px;
+    text-align: center; pointer-events: none;
+  }
+  .scan-header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px; letter-spacing: 3px;
+    color: var(--accent); line-height: 1;
+  }
+  .scan-header p { color: #999; font-size: 13px; margin-top: 3px; }
+
+  .scan-frame-wrap {
+    position: fixed; inset: 0; z-index: 3;
+    display: none; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .scan-frame-wrap.show { display: flex; }
+
+  .scan-frame {
+    position: relative;
+    width: min(75vw, 300px);
+    aspect-ratio: 2/1;
+  }
+  .scan-frame::before, .scan-frame::after,
+  .scan-corner-br, .scan-corner-bl {
+    content: ''; position: absolute;
+    width: 28px; height: 28px;
+    border-color: var(--accent); border-style: solid;
+  }
+  .scan-frame::before { top: 0; left: 0;   border-width: 3px 0 0 3px; }
+  .scan-frame::after  { top: 0; right: 0;  border-width: 3px 3px 0 0; }
+  .scan-corner-br     { bottom: 0; right: 0; border-width: 0 3px 3px 0; }
+  .scan-corner-bl     { bottom: 0; left: 0;  border-width: 0 0 3px 3px; }
+
+  .scan-line {
+    position: absolute; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scanMove 2s ease-in-out infinite;
+  }
+  @keyframes scanMove {
+    0%, 100% { top: 8%; }
+    50%       { top: 88%; }
+  }
+
+  .scan-bottom {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 4;
+    background: linear-gradient(to top, rgba(0,0,0,0.95) 60%, transparent);
+    padding: 60px 24px 36px;
+    padding-bottom: calc(36px + env(safe-area-inset-bottom, 20px));
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+
+  #start-btn {
+    width: 100%; max-width: 400px; padding: 16px 24px;
+    background: var(--accent); color: #0e0e0e;
+    border: none; border-radius: 14px; cursor: pointer;
+    font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px;
+    transition: opacity .15s, transform .1s;
+  }
+  #start-btn:active { opacity: 0.85; transform: scale(0.98); }
+
+  .manual-fallback {
+    width: 100%; max-width: 400px; display: flex; gap: 8px;
+  }
+  .manual-fallback input {
+    flex: 1; background: rgba(255,255,255,0.08);
+    border: 1.5px solid var(--border); border-radius: 10px;
+    color: var(--text); font-family: 'DM Sans', sans-serif;
+    font-size: 15px; padding: 11px 14px; outline: none;
+    transition: border-color .2s;
+  }
+  .manual-fallback input:focus { border-color: var(--accent); }
+  .manual-fallback input::placeholder { color: var(--muted); }
+  .manual-fallback button {
+    background: #222; border: 1.5px solid var(--border);
+    border-radius: 10px; color: var(--text);
+    font-family: 'DM Sans', sans-serif; font-size: 15px;
+    padding: 11px 18px; cursor: pointer; white-space: nowrap;
+    transition: border-color .2s;
+  }
+  .manual-fallback button:hover { border-color: var(--accent); }
+
+  #scan-status { font-size: 13px; color: var(--muted); text-align: center; min-height: 18px; }
+
+  /* ══════════════════════════════════
+     PAGE 2 — CONFIRMATION + PRIX
+  ══════════════════════════════════ */
+  #p2 .inner, #p3 .inner {
+    max-width: 480px; margin: 0 auto;
+    padding: 52px 20px 40px;
+    padding-bottom: calc(40px + env(safe-area-inset-bottom, 20px));
+  }
+
+  #p2 h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 30px; letter-spacing: 1.5px; margin-bottom: 4px;
+  }
+  #p2 .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+
+  .product-confirm-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; overflow: hidden; margin-bottom: 24px;
+  }
+
+  #p2-img-wrap {
+    height: 200px; background: #111;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  #p2-img-wrap img { width: 100%; height: 100%; object-fit: contain; }
+  .img-placeholder {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 10px; color: var(--muted); font-size: 13px;
+  }
+  .img-placeholder svg { opacity: 0.4; }
+
+  .product-details { padding: 16px 20px 20px; }
+  #p2-name { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  #p2-brand { color: var(--muted); font-size: 14px; margin-bottom: 12px; }
+  #p2-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  #p2-barcode { font-family: monospace; font-size: 12px; color: var(--muted); letter-spacing: 1px; }
+
+  .price-section {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px; margin-bottom: 20px;
+  }
+  .price-question { font-size: 15px; font-weight: 500; margin-bottom: 14px; line-height: 1.5; }
+  .price-input-wrap {
+    display: flex; align-items: center;
+    background: #111; border: 1.5px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    transition: border-color .2s; padding: 0 16px; gap: 8px;
+  }
+  .price-input-wrap:focus-within { border-color: var(--accent); }
+  .price-euro { color: var(--accent); font-size: 22px; font-weight: 600; flex-shrink: 0; padding: 10px 0; }
+  #price-input {
+    flex: 1; background: none; border: none; outline: none;
+    color: var(--text); font-family: 'DM Sans', sans-serif;
+    font-size: 28px; font-weight: 600; padding: 14px 0; width: 0;
+    -moz-appearance: textfield;
+  }
+  #price-input::-webkit-outer-spin-button,
+  #price-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  #confirm-btn {
+    width: 100%; padding: 16px;
+    background: var(--accent); color: #0e0e0e;
+    border: none; border-radius: 14px; cursor: pointer;
+    font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px;
+    transition: opacity .15s, transform .1s;
+  }
+  #confirm-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none !important; }
+  #confirm-btn:not(:disabled):active { opacity: 0.85; transform: scale(0.98); }
+
+  /* ══════════════════════════════════
+     PAGE 3 — RÉSULTAT
+  ══════════════════════════════════ */
+  #p3 .inner { padding-top: 52px; }
+
+  .result-top {
+    display: flex; gap: 20px; align-items: flex-start;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px; margin-bottom: 16px;
+  }
+  .result-left { flex-shrink: 0; text-align: center; }
+  #r-circle {
+    width: 88px; height: 88px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; margin-bottom: 6px;
+  }
+  #r-circle span { font-family: 'Bebas Neue', sans-serif; font-size: 58px; color: #0e0e0e; line-height: 1; }
+  #r-grade-name { font-size: 10px; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; }
+  .result-right { flex: 1; min-width: 0; }
+  #r-name { font-size: 22px; font-weight: 600; line-height: 1.2; margin-bottom: 4px; word-break: break-word; }
+  #r-brand { color: var(--muted); font-size: 13px; }
+
+  #r-verdict-card {
+    border-radius: 14px; padding: 14px 18px;
+    border: 1px solid; font-size: 20px; font-weight: 600; line-height: 1.35; margin-bottom: 16px;
+  }
+
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 10px; margin-bottom: 16px;
+  }
+  .stat-cell {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px 10px; text-align: center;
+  }
+  .stat-value {
+    font-family: 'Bebas Neue', sans-serif; font-size: 28px;
+    color: var(--accent); letter-spacing: 1px; line-height: 1;
+  }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .scale-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px 20px; margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;
+  }
+  .scale-row { display: flex; gap: 8px; }
+  .scale-cell {
+    flex: 1; padding: 10px 4px;
+    border-radius: 10px; text-align: center;
+    position: relative; opacity: 0.4; transition: opacity .3s;
+  }
+  .scale-cell.active-grade { opacity: 1; }
+  .scale-cell.active-grade::after {
+    content: '▲'; position: absolute; bottom: -16px;
+    left: 50%; transform: translateX(-50%); font-size: 10px;
+  }
+  .scale-letter { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: #0e0e0e; line-height: 1; }
+
+  .result-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+  .btn-primary {
+    width: 100%; padding: 16px;
+    background: var(--accent); color: #0e0e0e;
+    border: none; border-radius: 14px; cursor: pointer;
+    font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px;
+    transition: opacity .15s, transform .1s;
+  }
+  .btn-primary:active { opacity: 0.85; transform: scale(0.98); }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ PAGE 1 — SCANNER ══════════════════ -->
+<div class="page active" id="p1">
+  <div class="scan-header">
+    <h1>CapsLab</h1>
+  </div>
+
+  <video id="video-el" playsinline autoplay muted></video>
+  <div class="scan-vignette" id="scan-vignette"></div>
+
+  <div class="scan-frame-wrap" id="scan-frame-wrap">
+    <div class="scan-frame">
+      <div class="scan-corner-br"></div>
+      <div class="scan-corner-bl"></div>
+      <div class="scan-line"></div>
+    </div>
+  </div>
+
+  <div class="scan-bottom">
+    <button id="start-btn" onclick="startScan()">SCANNER UNE BIÈRE</button>
+    <div class="manual-fallback">
+      <input type="text" id="manual-input" inputmode="numeric" maxlength="20"
+             placeholder="Code-barres manuel…"
+             onkeydown="if(event.key==='Enter') manualSearch()">
+      <button onclick="manualSearch()">OK</button>
+    </div>
+    <div id="scan-status"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ PAGE 2 — CONFIRMATION + PRIX ══════════════════ -->
+<div class="page" id="p2">
+  <div class="inner">
+    <button class="back-btn" onclick="goBack('p1','p2')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+      Rescanner
+    </button>
+
+    <h2>C'est bien cette bière ?</h2>
+    <p class="subtitle">Vérifie que c'est le bon produit</p>
+
+    <div class="product-confirm-card">
+      <div id="p2-img-wrap"></div>
+      <div class="product-details">
+        <div id="p2-name">—</div>
+        <div id="p2-brand"></div>
+        <div id="p2-pills"></div>
+        <div id="alcohol-hint" style="display:none; font-size:15px; font-weight:700; color:var(--text); margin-top:8px; line-height:1.4;">
+          Désolé j'ai pas trouvé le taux d'alcool, mais regarde sur l'étiquette et donne le moi stp 😁
+        </div>
+        <div id="p2-barcode"></div>
+      </div>
+    </div>
+
+    <div class="price-section">
+      <div class="price-question">
+        C'est quoi le <span style="color:var(--accent)">prix affiché</span> en rayon ?
+      </div>
+      <div class="price-input-wrap">
+        <span class="price-euro">€</span>
+        <input type="number" id="price-input" inputmode="decimal" step="0.01"
+               min="0.01" placeholder="0.00" oninput="checkConfirmReady()">
+      </div>
+    </div>
+
+    <button id="confirm-btn" disabled onclick="confirmPrice()">
+      VOIR LE SCORE CUITE →
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════ PAGE 3 — RÉSULTAT ══════════════════ -->
+<div class="page" id="p3">
+  <div class="inner">
+    <button class="back-btn" onclick="goBack('p2','p3')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+      Modifier le prix
+    </button>
+
+    <div class="result-top">
+      <div class="result-left">
+        <div id="r-circle"><span id="r-letter">–</span></div>
+        <div id="r-grade-name">–</div>
+      </div>
+      <div class="result-right">
+        <div id="r-name">–</div>
+        <div id="r-brand"></div>
+      </div>
+    </div>
+
+    <div id="r-verdict-card"></div>
+
+    <div class="stats-grid">
+      <div class="stat-cell">
+        <div class="stat-value" id="r-vol">–</div>
+        <div class="stat-label">Volume (mL)</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-value" id="r-alc">–</div>
+        <div class="stat-label">Alcool (%)</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-value" id="r-price">–</div>
+        <div class="stat-label">Prix (€)</div>
+      </div>
+    </div>
+
+    <div class="scale-card">
+      <div class="card-title">Échelle Qualité Cuite</div>
+      <div class="scale-row" id="r-scale-row"></div>
+    </div>
+
+    <div class="result-actions">
+      <button class="btn-primary" onclick="resetToScan()">SCANNER UNE AUTRE BIÈRE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ LOADING ══════════════════ -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div id="loading-msg">Recherche du produit…</div>
+</div>
+
+<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script>
+/* ─────────────────────────────────────────
+   STATE
+───────────────────────────────────────── */
+let currentProduct = null;
+let scanning = false;
+let codeReader = null;
+
+/* ─────────────────────────────────────────
+   NAVIGATION
+───────────────────────────────────────── */
+function goForward(toId) {
+  document.querySelectorAll('.page').forEach(p => {
+    if (p.classList.contains('active')) p.classList.add('behind');
+    p.classList.remove('active');
+  });
+  const target = document.getElementById(toId);
+  target.classList.remove('behind');
+  target.classList.add('active');
+  target.scrollTop = 0;
+}
+
+function goBack(toId, fromId) {
+  document.getElementById(fromId).classList.remove('active');
+  const to = document.getElementById(toId);
+  to.classList.remove('behind');
+  to.classList.add('active');
+  to.scrollTop = 0;
+}
+
+function resetToScan() {
+  if (scanning) stopScan();
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active', 'behind'));
+  document.getElementById('p1').classList.add('active');
+  document.getElementById('manual-input').value = '';
+  setScanStatus('');
+}
+
+/* ─────────────────────────────────────────
+   LOADING
+───────────────────────────────────────── */
+function showLoading(msg) {
+  document.getElementById('loading-msg').textContent = msg || 'Chargement…';
+  document.getElementById('loading').classList.add('show');
+}
+function hideLoading() {
+  document.getElementById('loading').classList.remove('show');
+}
+
+/* ─────────────────────────────────────────
+   SCAN STATUS
+───────────────────────────────────────── */
+function setScanStatus(msg, isErr) {
+  const el = document.getElementById('scan-status');
+  el.textContent = msg;
+  el.className = isErr ? 'err' : '';
+}
+
+/* ─────────────────────────────────────────
+   SCANNER
+───────────────────────────────────────── */
+async function startScan() {
+  if (scanning) { stopScan(); return; }
+  setScanStatus('');
+
+  if (!window.ZXing) {
+    setScanStatus('ZXing non chargé. Réessaie dans un instant.', true);
+    return;
+  }
+
+  try {
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    const devices = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
+
+    if (!devices || devices.length === 0) {
+      setScanStatus('Aucune caméra détectée.', true);
+      return;
+    }
+
+    const back = devices.find(d => /back|rear|environment/i.test(d.label));
+    const deviceId = back ? back.deviceId : devices[devices.length - 1].deviceId;
+
+    document.getElementById('video-el').style.display = 'block';
+    document.getElementById('scan-vignette').classList.add('show');
+    document.getElementById('scan-frame-wrap').classList.add('show');
+    document.getElementById('start-btn').textContent = 'ARRÊTER';
+    scanning = true;
+    setScanStatus('Pointe vers le code-barres de la bière…');
+
+    codeReader.decodeFromVideoDevice(deviceId, document.getElementById('video-el'), (result) => {
+      if (result) { stopScan(); fetchProduct(result.getText()); }
+    });
+
+  } catch (e) {
+    setScanStatus('Accès caméra refusé ou indisponible : ' + e.message, true);
+    scanning = false;
+  }
+}
+
+function stopScan() {
+  if (codeReader) { try { codeReader.reset(); } catch(_) {} codeReader = null; }
+  document.getElementById('video-el').style.display = 'none';
+  document.getElementById('scan-vignette').classList.remove('show');
+  document.getElementById('scan-frame-wrap').classList.remove('show');
+  document.getElementById('start-btn').textContent = 'SCANNER UNE BIÈRE';
+  scanning = false;
+}
+
+function manualSearch() {
+  const val = document.getElementById('manual-input').value.trim();
+  if (!val) return;
+  if (scanning) stopScan();
+  fetchProduct(val);
+}
+
+/* ─────────────────────────────────────────
+   ALCOHOL EXTRACTION — 5 couches
+───────────────────────────────────────── */
+function extractAlcohol(p) {
+  // Couche 1 — nutriments (rare sur bières FR mais on tente)
+  const n = p.nutriments || {};
+  for (const key of ['alcohol_100g','alcohol','alcohol_value','alcohol_serving']) {
+    const v = parseFloat(n[key]);
+    if (!isNaN(v) && v > 0 && v <= 30) return v;
+  }
+  for (const [k, val] of Object.entries(n)) {
+    if (/alc/i.test(k)) {
+      const v = parseFloat(val);
+      if (!isNaN(v) && v > 0 && v <= 30) return v;
+    }
+  }
+
+  // Couche 2 — tous les champs texte (packaging_text_fr en priorité)
+  const textFields = [
+    p.packaging_text_fr,
+    p.packaging_text,
+    p.packaging_text_en,
+    p.ingredients_text_fr,
+    p.ingredients_text,
+    p.ingredients_text_en,
+    p.generic_name_fr,
+    p.generic_name,
+    p.generic_name_en,
+    p.product_name_fr,
+    p.product_name,
+    p.abbreviated_product_name,
+    p.quantity,
+    p.labels,
+    Array.isArray(p.labels_tags)     ? p.labels_tags.join(' ')     : '',
+    Array.isArray(p.categories_tags) ? p.categories_tags.join(' ') : '',
+  ].filter(f => f && typeof f === 'string');
+
+  // Regex avec mot-clé : "Alc. 5%", "alcool : 5,5%", "5% vol", "5.0% alc/vol"
+  const R1 = /(?:alc(?:ool|\.)?|alcohol|vol(?:ume)?)[\s.:]*(\d{1,2}[.,]\d{0,2}|\d{1,2})\s*%|(\d{1,2}[.,]\d{0,2}|\d{1,2})\s*%\s*(?:vol|alc)/gi;
+  for (const field of textFields) {
+    let m; R1.lastIndex = 0;
+    while ((m = R1.exec(field)) !== null) {
+      const v = parseFloat((m[1] || m[2] || '').replace(',', '.'));
+      if (!isNaN(v) && v >= 0.5 && v <= 30) return v;
+    }
+  }
+
+  // Regex simple : pourcentage seul dans plage bière (ex: "500ml - 5,0%")
+  const R2 = /\b(\d{1,2}[.,]\d)\s*%/g;
+  for (const field of textFields) {
+    let m; R2.lastIndex = 0;
+    while ((m = R2.exec(field)) !== null) {
+      const v = parseFloat(m[1].replace(',', '.'));
+      if (!isNaN(v) && v >= 0.5 && v <= 15) return v;
+    }
+  }
+
+  return null;
+}
+
+/* ─────────────────────────────────────────
+   OPEN FOOD FACTS
+───────────────────────────────────────── */
+async function offGet(barcode) {
+  // Pas de ?fields= — on récupère tout le produit comme dans la version originale.
+  // On essaie les deux hosts et on garde celui qui a le degré d'alcool.
+  let fallback = null;
+  for (const host of ['https://world.openfoodfacts.org', 'https://fr.openfoodfacts.org']) {
+    try {
+      const res  = await fetch(`${host}/api/v2/product/${encodeURIComponent(barcode)}.json`);
+      const data = await res.json();
+      if (data.product) {
+        if (!fallback) fallback = data.product;
+        if (extractAlcohol(data.product) !== null) return data.product;
+      }
+    } catch (_) {}
+  }
+  return fallback;
+}
+
+async function offSearchAlcohol(name, brand) {
+  // Recherche OFF par nom+marque pour trouver une fiche qui a le degré d'alcool
+  const terms = encodeURIComponent(`${name} ${brand}`.trim());
+  try {
+    const res  = await fetch(
+      `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${terms}`
+      + `&action=process&json=1&page_size=10`
+    );
+    const data = await res.json();
+    if (!data.products) return null;
+    for (const candidate of data.products) {
+      const v = extractAlcohol(candidate);
+      if (v !== null) return v;
+    }
+  } catch (_) {}
+  return null;
+}
+
+async function fetchProduct(barcode) {
+  setScanStatus('');
+  showLoading('Recherche du produit…');
+
+  try {
+    const p = await offGet(barcode);
+
+    if (!p) {
+      hideLoading();
+      setScanStatus('Produit introuvable', true);
+      return;
+    }
+
+    // Volume
+    let volume = null;
+    const qty = (p.quantity || '').toLowerCase();
+    if (qty) {
+      const m = qty.match(/([\d.,]+)\s*(?:ml|cl|l\b)/);
+      if (m) {
+        let v = parseFloat(m[1].replace(',', '.'));
+        if (qty.includes('cl')) v *= 10;
+        else if (/\bl\b/.test(qty) && !qty.includes('ml') && !qty.includes('cl')) v *= 1000;
+        volume = v;
+      }
+    }
+    if (!volume && p.product_quantity) {
+      volume = parseFloat(p.product_quantity);
+      if (!isNaN(volume)) {
+        const unit = (p.product_quantity_unit || '').toLowerCase();
+        if (unit === 'cl') volume *= 10;
+        else if (unit === 'l') volume *= 1000;
+      } else { volume = null; }
+    }
+
+    // Alcool — 3 tentatives avant fallback manuel
+    let alcohol = extractAlcohol(p);
+
+    if (alcohol === null) {
+      showLoading('Recherche du degré d\'alcool…');
+      const name  = p.product_name || p.product_name_fr || '';
+      const brand = p.brands || '';
+      alcohol = await offSearchAlcohol(name, brand);
+    }
+
+    currentProduct = {
+      barcode,
+      name:  p.product_name || p.product_name_fr || p.abbreviated_product_name || 'Produit inconnu',
+      brand: p.brands || '',
+      volume,
+      alcohol,   // null = saisie manuelle page 2
+      image: p.image_front_url || p.image_url || null,
+    };
+
+    hideLoading();
+    fillPage2(currentProduct);
+    goForward('p2');
+
+  } catch (e) {
+    hideLoading();
+    setScanStatus('Erreur réseau : ' + e.message, true);
+  }
+}
+
+/* ─────────────────────────────────────────
+   PAGE 2 — FILL
+───────────────────────────────────────── */
+function fillPage2(prod) {
+  const imgWrap = document.getElementById('p2-img-wrap');
+  if (prod.image) {
+    imgWrap.innerHTML = `<img src="${escHtml(prod.image)}" alt="Photo produit" onerror="this.parentNode.innerHTML=bottlePlaceholder()">`;
+  } else {
+    imgWrap.innerHTML = bottlePlaceholder();
+  }
+
+  document.getElementById('p2-name').textContent    = prod.name;
+  document.getElementById('p2-brand').textContent   = prod.brand;
+  document.getElementById('p2-barcode').textContent = prod.barcode;
+
+  const pills = document.getElementById('p2-pills');
+  pills.innerHTML = prod.volume
+    ? `<span class="pill">🍺 ${Math.round(prod.volume)} mL</span>`
+    : `<span class="pill missing">⚠ Volume non trouvé</span>`;
+
+  const hint = document.getElementById('alcohol-hint');
+  if (prod.alcohol != null) {
+    pills.innerHTML += `<div class="pill"><span class="pill-label">ALCOOL</span> ${prod.alcohol}%</div>`;
+    hint.style.display = 'none';
+  } else {
+    pills.innerHTML += `<div class="pill pill-input">
+      <span class="pill-label">ALCOOL</span>
+      <input type="number" id="alcohol-override"
+        placeholder="ex: 5.5" step="0.1" min="0.1" max="30"
+        inputmode="decimal" oninput="checkConfirmReady()"/>
+      <span>%</span>
+    </div>`;
+    hint.style.display = 'block';
+  }
+
+  document.getElementById('price-input').value = '';
+  document.getElementById('confirm-btn').disabled = true;
+}
+
+function bottlePlaceholder() {
+  return `<div class="img-placeholder">
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="26" y="4" width="12" height="8" rx="3" fill="#555"/>
+      <path d="M22 14 C16 20 14 28 14 38 C14 50 20 58 32 58 C44 58 50 50 50 38 C50 28 48 20 42 14 Z" fill="#3a3a2a" stroke="#555" stroke-width="1.5"/>
+      <path d="M28 22 C26 26 25 32 25 38 C25 44 27 50 32 50 C37 50 39 44 39 38 C39 32 38 26 36 22 Z" fill="#2a2a1a" opacity="0.5"/>
+      <rect x="24" y="12" width="16" height="5" rx="2" fill="#444"/>
+    </svg>
+    <span>Pas d'image disponible</span>
+  </div>`;
+}
+
+function checkConfirmReady() {
+  const price = parseFloat(document.getElementById('price-input').value.replace(',', '.'));
+  const priceOk = !isNaN(price) && price > 0;
+  let alcoholOk;
+  if (currentProduct?.alcohol != null) {
+    alcoholOk = true;
+  } else {
+    const inp = document.getElementById('alcohol-override');
+    const v = inp ? parseFloat(inp.value) : NaN;
+    alcoholOk = !isNaN(v) && v > 0;
+  }
+  document.getElementById('confirm-btn').disabled = !(priceOk && alcoholOk);
+}
+
+function confirmPrice() {
+  const price = parseFloat(document.getElementById('price-input').value.replace(',', '.'));
+  if (!price || price <= 0) return;
+  if (!currentProduct.volume) {
+    alert('Le volume de cette bière est inconnu. Le score ne peut pas être calculé.');
+    return;
+  }
+  const alcohol = currentProduct.alcohol != null
+    ? currentProduct.alcohol
+    : parseFloat(document.getElementById('alcohol-override')?.value?.replace(',', '.'));
+  if (!alcohol || isNaN(alcohol) || alcohol <= 0) {
+    alert('Saisis le degré d\'alcool pour calculer le score.');
+    return;
+  }
+  currentProduct.price   = price;
+  currentProduct.alcohol = alcohol;
+  computeAndShowResult(currentProduct);
+}
+
+/* ─────────────────────────────────────────
+   SCORING — seuils fixes (mL × % / €)
+───────────────────────────────────────── */
+const GRADE_COLORS = { A: '#27ae60', B: '#8cc63f', C: '#f0c040', D: '#e07c30', E: '#d63031' };
+const GRADE_SCALE  = [
+  { letter: 'A', min: 2500 },
+  { letter: 'B', min: 1900 },
+  { letter: 'C', min: 1300 },
+  { letter: 'D', min:  800 },
+  { letter: 'E', min:    0 },
+];
+
+function computeAndShowResult(prod) {
+  const rawScore = (prod.volume * prod.alcohol) / prod.price;
+
+  // Seuils absolus fixes
+  let letter, color, gradeName;
+  if      (rawScore >= 2500) { letter = 'A'; color = '#27ae60'; gradeName = 'Excellent'; }
+  else if (rawScore >= 1900) { letter = 'B'; color = '#8cc63f'; gradeName = 'Bon plan';  }
+  else if (rawScore >= 1300) { letter = 'C'; color = '#f0c040'; gradeName = 'Moyen';     }
+  else if (rawScore >= 800)  { letter = 'D'; color = '#e07c30'; gradeName = 'Bof bof';   }
+  else                       { letter = 'E'; color = '#d63031'; gradeName = 'Arnaque';   }
+
+  // Verdict selon note + degré
+  let verdict;
+  if (letter === 'A') {
+    verdict = "🤪 Ok avec ça on va pas enfiler des perles !";
+  } else if (letter === 'B') {
+    verdict = "🥳 Ce soir c'est soirée mousse !";
+  } else if (letter === 'C') {
+    verdict = prod.alcohol >= 7
+      ? "🙂 Elle est forte mais elle est trop chère, c'est pas ce qu'on cherche."
+      : "🙂 Pas forte, trop chère pour ce que c'est, flemme non ?";
+  } else if (letter === 'D') {
+    verdict = prod.alcohol >= 7
+      ? "😒 Forte mais vraiment beaucoup trop chère là, sérieux oublie."
+      : "😒 Frérot c'est soirée EHPAD ce soir ?";
+  } else {
+    verdict = "🤮 La pire arnaque du siècle, fuis et demande une compensation pour avoir osé mettre cette bière en rayon.";
+  }
+
+  document.getElementById('r-letter').textContent      = letter;
+  document.getElementById('r-circle').style.background = color;
+  document.getElementById('r-grade-name').textContent  = gradeName.toUpperCase();
+  document.getElementById('r-name').textContent  = prod.name;
+  document.getElementById('r-brand').textContent = prod.brand;
+
+  const vc = document.getElementById('r-verdict-card');
+  vc.textContent       = verdict;
+  vc.style.background  = color + '18';
+  vc.style.borderColor = color + '44';
+  vc.style.color       = '#f0ede6';
+
+  document.getElementById('r-vol').textContent   = Math.round(prod.volume);
+  document.getElementById('r-alc').textContent   = prod.alcohol;
+  document.getElementById('r-price').textContent = prod.price.toFixed(2);
+
+  document.getElementById('r-scale-row').innerHTML = GRADE_SCALE.map(g => `
+    <div class="scale-cell ${g.letter === letter ? 'active-grade' : ''}" style="background:${GRADE_COLORS[g.letter]}">
+      <div class="scale-letter">${g.letter}</div>
+    </div>`).join('');
+
+  goForward('p3');
+}
+
+/* ─────────────────────────────────────────
+   UTILS
+───────────────────────────────────────── */
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
